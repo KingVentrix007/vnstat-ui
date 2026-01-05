@@ -111,8 +111,17 @@ def main(page: ft.Page):
         year_down_text.value = f"{down_gb:.2f} GB"
         year_total_text.value = f"{total:.2f} GB"
 
-    def add_graph_point(up_mb: float, down_mb: float):
-        x = len(up_series.points)
+    def add_graph_point(month_timestamp: int, up_mb: float, down_mb: float):
+        # Convert Unix timestamp to a datetime
+        dt = datetime.fromtimestamp(month_timestamp)
+        # Use timestamp as x, or if you prefer, use formatted string for tooltip/labels
+        x = month_timestamp
+
+        # Avoid duplicate points (optional)
+        if up_series.points and up_series.points[-1].x == x and up_series.points[-1].y == up_mb:
+            return
+
+        # Add new points
         up_series.points.append(LineChartDataPoint(x=x, y=up_mb))
         down_series.points.append(LineChartDataPoint(x=x, y=down_mb))
 
@@ -135,7 +144,7 @@ def main(page: ft.Page):
             update_month_stats(month_up, month_down)
             update_day_stats(day_up, day_down)
             update_year_stats(year_up, year_down)
-            add_graph_point(month_up, month_down)
+            add_graph_point(day_stamp,day_up, day_down)
 
             page.update()
             await asyncio.sleep(1)
