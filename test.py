@@ -1,42 +1,38 @@
 import flet as ft
+from flet_charts import LineChart, LineChartData, LineChartDataPoint
+
 def main(page: ft.Page):
-    page.title = "Flet Line Chart Example"
-    
-    # Define the data points for the chart
-    data_points_1 = [
-        ft.LineChartDataPoint(1, 1),
-        ft.LineChartDataPoint(3, 1.5),
-        ft.LineChartDataPoint(5, 1.4),
-        ft.LineChartDataPoint(7, 3.4),
-        ft.LineChartDataPoint(10, 2),
-        ft.LineChartDataPoint(12, 2.2),
-        ft.LineChartDataPoint(13, 1.8),
-    ]
+    page.title = "Test Chart"
+    page.bgcolor = ft.Colors.BLACK
+    page.theme_mode = ft.ThemeMode.DARK
 
-    # Create the line chart data series
-    line_chart_data = [
-        ft.LineChartData(
-            data_points=data_points_1,
-            stroke_width=4,
-            color=ft.colors.LIGHT_GREEN,
-            curved=True,
-            stroke_cap_round=True,
-        ),
-    ]
+    # Create chart data objects with points
+    up_series = LineChartData(
+        color=ft.Colors.BLUE_400,
+        points=[
+            LineChartDataPoint(x=0, y=1),
+            LineChartDataPoint(x=1, y=2),
+            LineChartDataPoint(x=2, y=3),
+            LineChartDataPoint(x=3, y=4),
+        ],
+    )
 
-    # Create the LineChart control
-    chart = ft.LineChart(
-        data_series=line_chart_data,
-        border=ft.border.all(1, ft.colors.GREY),
-        horizontal_grid_lines=ft.ChartGridLines(color=ft.colors.GREY, width=0.5),
-        vertical_grid_lines=ft.ChartGridLines(color=ft.colors.GREY, width=0.5),
-        left_axis=ft.ChartAxis(labels_size=40),
-        bottom_axis=ft.ChartAxis(labels_size=40),
-        tooltip_bgcolor=ft.colors.BLUE_GREY_100,
+    down_series = LineChartData(
+        color=ft.Colors.RED_400,
+        points=[
+            LineChartDataPoint(x=0, y=2),
+            LineChartDataPoint(x=1, y=1),
+            LineChartDataPoint(x=2, y=4),
+            LineChartDataPoint(x=3, y=3),
+        ],
+    )
+
+    chart = LineChart(
+        data_series=[up_series, down_series],
+        min_y=0,
         expand=True,
     )
 
-    # Add the chart to the page
     page.add(chart)
 
 ft.app(target=main)

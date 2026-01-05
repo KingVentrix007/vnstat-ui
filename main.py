@@ -1,10 +1,11 @@
 import flet as ft
-from flet_charts import LineChart
-from datetime import datetime, timedelta
-import vnstat_interface
-# from flet_timer.flet_timer import Timer
-# ---------- Helper UI Components ----------
+from flet_charts import LineChart, LineChartData, LineChartDataPoint
+from datetime import datetime
+import random
+import asyncio
+import vnstat_interface as vni
 
+# ---------- Helper UI Components ----------
 def stat_box(title: str, value_ref: ft.Text, bgcolor=None):
     return ft.Container(
         content=ft.Column(
@@ -21,7 +22,6 @@ def stat_box(title: str, value_ref: ft.Text, bgcolor=None):
     )
 
 # ---------- Main App ----------
-
 def main(page: ft.Page):
     page.title = "Data Monitor"
     page.bgcolor = ft.Colors.BLACK
@@ -33,7 +33,7 @@ def main(page: ft.Page):
     down_text = ft.Text("0 MB", size=24, weight=ft.FontWeight.BOLD)
     total_text = ft.Text("0 MB", size=24, weight=ft.FontWeight.BOLD)
     
-    # ---------- Day Stats (NEW BLOCK) ----------
+    # ---------- Day Stats ----------
     day_up_text = ft.Text("0 MB", size=20, weight=ft.FontWeight.BOLD)
     day_down_text = ft.Text("0 MB", size=20, weight=ft.FontWeight.BOLD)
     day_total_text = ft.Text("0 MB", size=20, weight=ft.FontWeight.BOLD)
@@ -46,16 +46,15 @@ def main(page: ft.Page):
         ],
         spacing=16,
     )
-    top_stats = ft.Row(
+    
+    month_stats = ft.Row(
         [
-            stat_box("DATA UP", up_text),
-            stat_box("DATA DOWN", down_text),
-            stat_box("TOTAL", total_text),
+            stat_box("MONTH UP", up_text),
+            stat_box("MONTH DOWN", down_text),
+            stat_box("MONTH TOTAL", total_text),
         ],
         spacing=16,
     )
-
-    
 
     # ---------- Year Stats ----------
     year_up_text = ft.Text("0 GB", size=22, weight=ft.FontWeight.BOLD)
@@ -72,92 +71,81 @@ def main(page: ft.Page):
     )
 
     # ---------- Chart Data ----------
-    up_data: list[tuple[datetime, float]] = []
-    down_data: list[tuple[datetime, float]] = []
+    chart_x_labels: list[str] = []  # timestamps
+    chart_points_up: list[LineChartDataPoint] = [LineChartDataPoint(x=i, y=y) for i, y in enumerate([1,2,3,4])]
+    chart_points_down: list[LineChartDataPoint] = [LineChartDataPoint(x=i, y=y) for i, y in enumerate([1,2,3,4])]
+
+    up_series = LineChartData(points=chart_points_up, color=ft.Colors.BLUE_400)
+    down_series = LineChartData(points=chart_points_down, color=ft.Colors.RED_400)
 
     chart = LineChart(
-        data_series=[
-            {
-                "data": up_data,
-                "color": ft.Colors.BLUE_400,
-                "stroke_width": 3,
-                "label": "Upload",
-            },
-            {
-                "data": down_data,
-                "color": ft.Colors.RED_400,
-                "stroke_width": 3,
-                "label": "Download",
-            },
-        ],
+        data_series=[up_series, down_series],
         min_y=0,
-        expand=True,
-        vertical_grid_lines=True
+        expand=True
     )
 
     chart_container = ft.Container(
         content=chart,
         padding=20,
         border_radius=12,
-        bgcolor=ft.Colors.with_opacity(0.08, ft.Colors.WHITE),
+        bgcolor=ft.Colors.with_opacity(0.08, ft.Colors.BLACK),
         expand=True,
     )
 
     # ---------- Update Functions ----------
-
-    def update_current_stats(up_mb: float, down_mb: float):
+    def update_month_stats(up_mb: float, down_mb: float):
         total = up_mb + down_mb
         up_text.value = f"{up_mb:.2f} MB"
         down_text.value = f"{down_mb:.2f} MB"
         total_text.value = f"{total:.2f} MB"
-        page.update()
 
     def update_day_stats(up_mb: float, down_mb: float):
         total = up_mb + down_mb
         day_up_text.value = f"{up_mb:.2f} MB"
         day_down_text.value = f"{down_mb:.2f} MB"
         day_total_text.value = f"{total:.2f} MB"
-        page.update()
 
     def update_year_stats(up_gb: float, down_gb: float):
         total = up_gb + down_gb
         year_up_text.value = f"{up_gb:.2f} GB"
         year_down_text.value = f"{down_gb:.2f} GB"
         year_total_text.value = f"{total:.2f} GB"
-        page.update()
 
-    def add_graph_point(date: datetime, up_mb: float, down_mb: float):
-        up_data.append((date, up_mb))
-        down_data.append((date, down_mb))
+    def add_graph_point(up_mb: float, down_mb: float):
+        x = len(up_series.points)
+        up_series.points.append(LineChartDataPoint(x=x, y=up_mb))
+        down_series.points.append(LineChartDataPoint(x=x, y=down_mb))
+
+        # Limit to last N points
+        N = 20
+        up_series.points = up_series.points[-N:]
+        down_series.points = down_series.points[-N:]
+
         chart.update()
-    def update_all_stats_periodically():
-        """
-        This function will be called periodically.
-        Replace the random values below with your real data.
-        # """
-        # # --- Provide your actual values here ---
-        current_up = random.uniform(50, 150)
-        current_down = random.uniform(80, 300)
-        # day_up = random.uniform(5, 50)
-        # day_down = random.uniform(10, 100)
-        # year_up = random.uniform(20, 100)
-        # year_down = random.uniform(50, 200)
-        # new_point_date = datetime.now()
 
-        # # --- Update all stats ---
-        # update_current_stats(current_up, current_down)
-        # update_day_stats(day_up, day_down)
-        # update_year_stats(year_up, year_down)
-        # add_graph_point(new_point_date, current_up, current_down)
+    # ---------- Async Periodic Update ----------
+    async def update_all_stats_periodically():
+        while True:
+            # Replace these with your actual data fetching
+            month_timestamp, month_up, month_down = vni.get_month_output()
+            day_stamp, day_up, day_down = vni.get_day_output()
+            year_stamp, year_up, year_down = vni.get_year_output()
 
-        page.update()
+            # Update stats
+            update_month_stats(month_up, month_down)
+            update_day_stats(day_up, day_down)
+            update_year_stats(year_up, year_down)
+            add_graph_point(month_up, month_down)
+
+            page.update()
+            await asyncio.sleep(1)
+
     # ---------- Layout ----------
     page.add(
         ft.Column(
             [
-                day_stats,        # <-- Day stats added here
-                top_stats,
-                
+                day_stats,
+                month_stats,
                 chart_container,
                 year_stats,
             ],
@@ -166,22 +154,7 @@ def main(page: ft.Page):
         )
     )
 
-    # page.add_timer(1, update_all_stats_periodically)  # 1 second interval
-
-    # page.timer.start()
-    # page.add(timer)
-    # ---------- Demo Data ----------
-    # update_current_stats(120.5, 340.2)
-    # update_day_stats(20.3, 50.7)
-    # update_year_stats(32.4, 88.1)
-
-    # base_date = datetime.now() - timedelta(days=6)
-    # for i in range(7):
-    #     add_graph_point(
-    #         base_date + timedelta(days=i),
-    #         50 + i * 10,
-    #         80 + i * 15,
-    #     )
+    asyncio.create_task(update_all_stats_periodically())
 
 # ---------- Run ----------
 ft.app(target=main)
