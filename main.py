@@ -1,5 +1,11 @@
 import flet as ft
-from flet_charts import LineChart, LineChartData, LineChartDataPoint
+from flet_charts import (
+    BarChart,
+    BarChartGroup,
+    BarChartRod,
+    BarChartTooltip,BarChartRodTooltip
+)
+
 from datetime import datetime
 import random
 import asyncio
@@ -71,18 +77,16 @@ def main(page: ft.Page):
     )
 
     # ---------- Chart Data ----------
-    chart_x_labels: list[str] = []  # timestamps
-    chart_points_up: list[LineChartDataPoint] = [LineChartDataPoint(x=i, y=y) for i, y in enumerate([1,2,3,4])]
-    chart_points_down: list[LineChartDataPoint] = [LineChartDataPoint(x=i, y=y) for i, y in enumerate([1,2,3,4])]
+    bar_groups: list[BarChartGroup] = []
+    bar_graph_timestamps = []
 
-    up_series = LineChartData(points=chart_points_up, color=ft.Colors.BLUE_400)
-    down_series = LineChartData(points=chart_points_down, color=ft.Colors.RED_400)
-
-    chart = LineChart(
-        data_series=[up_series, down_series],
-        min_y=0,
-        expand=True
+    chart = BarChart(
+        groups=bar_groups,
+        max_y=1,
+        expand=True,
+        
     )
+
 
     chart_container = ft.Container(
         content=chart,
@@ -111,26 +115,52 @@ def main(page: ft.Page):
         year_down_text.value = f"{down_gb:.2f} GB"
         year_total_text.value = f"{total:.2f} GB"
 
-    def add_graph_point(month_timestamp: int, up_mb: float, down_mb: float):
-        # Convert Unix timestamp to a datetime
-        dt = datetime.fromtimestamp(month_timestamp)
-        # Use timestamp as x, or if you prefer, use formatted string for tooltip/labels
-        x = month_timestamp
-
-        # Avoid duplicate points (optional)
-        if up_series.points and up_series.points[-1].x == x and up_series.points[-1].y == up_mb:
+    def add_graph_point(timestamp: int, up_mb: float, down_mb: float):
+        x = len(bar_groups)
+        if(timestamp in bar_graph_timestamps):
             return
+        bar_graph_timestamps.append(timestamp)
+            
+        group = BarChartGroup(
+            x=x,
+            rods=[
+                BarChartRod(
+                    
+                    from_y=0,
+                    to_y=up_mb,
+                    width=10,
+                    color=ft.Colors.BLUE_400,
+                    tooltip=BarChartRodTooltip(text="Hello"),
+                    
+                ),
+                BarChartRod(
+                    from_y=0,
+                    to_y=down_mb,
+                    width=10,
+                    color=ft.Colors.RED_400,
+                    tooltip=BarChartRodTooltip(text="Hello2"),
+                    
+                ),
+            ],
+        
+            
+        )
 
-        # Add new points
-        up_series.points.append(LineChartDataPoint(x=x, y=up_mb))
-        down_series.points.append(LineChartDataPoint(x=x, y=down_mb))
+        bar_groups.append(group)
 
-        # Limit to last N points
+        # Limit to last N bars
         N = 20
-        up_series.points = up_series.points[-N:]
-        down_series.points = down_series.points[-N:]
+        if len(bar_groups) > N:
+            bar_groups[:] = bar_groups[-N:]
+
+        # Auto-scale Y axis
+        chart.max_y = max(
+            max(up_mb, down_mb),
+            chart.max_y+10 or 0,
+        )
 
         chart.update()
+
 
     # ---------- Async Periodic Update ----------
     async def update_all_stats_periodically():
@@ -144,7 +174,7 @@ def main(page: ft.Page):
             update_month_stats(month_up, month_down)
             update_day_stats(day_up, day_down)
             update_year_stats(year_up, year_down)
-            add_graph_point(day_stamp,day_up, day_down)
+            add_graph_point(month_timestamp,month_up, month_down)
 
             page.update()
             await asyncio.sleep(1)
