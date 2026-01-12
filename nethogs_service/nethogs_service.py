@@ -2,9 +2,23 @@ import asyncio
 import json
 from collections import defaultdict
 from db_helper import add_process_data, get_today_data, get_process_history, get_total_usage
+import inspect
 import os
-
+from datetime import datetime
 SOCKET_PATH = "/tmp/nethogs_service.sock"
+ERR_PATH = "/mnt/MyCodeProjects/vnstat-ui/nethog_err.txt"
+
+
+def print_err(message):
+    frame_info = inspect.getframeinfo(inspect.currentframe().f_back)
+    filename = os.path.basename(frame_info.filename)
+    line_number = frame_info.lineno
+    now = datetime.now()
+    datetime_str = now.strftime("%Y-%m-%d %H:%M:%S")
+    err_msg = f"DEBUG({datetime_str}) {filename} line {line_number}: {message}"
+    with open(ERR_PATH,"a") as f:
+        f.write(err_msg+"\n")
+    # print(file=sys.stderr)
 
 def normalize_name(proc_str: str):
     normalized_name = proc_str
@@ -30,13 +44,21 @@ def normalize_name(proc_str: str):
     uuid_code = hash(proc_str)
     return normalized_name, uuid_code
 
-
+async def start_nethogs():
+    for _ in range(5):
+        try:
+            proc = await asyncio.create_subprocess_exec(
+                "nethogs", "-t",
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.DEVNULL,
+            )
+            return proc
+        except Exception as e:
+            print_err(f"Nethogs start failed: {e}")
+            await asyncio.sleep(1)
+    raise RuntimeError("Failed to start nethogs after retries")
 async def nethogs_tracker(update_interval=1):
-    proc = await asyncio.create_subprocess_exec(
-        "sudo", "nethogs", "-t",
-        stdout=asyncio.subprocess.PIPE,
-        stderr=asyncio.subprocess.DEVNULL,
-    )
+    proc = await start_nethogs()
 
     program_totals = defaultdict(lambda: {"sent_kbps": 0.0, "recv_kbps": 0.0, "total_bytes": 0.0})
 
@@ -44,6 +66,7 @@ async def nethogs_tracker(update_interval=1):
         while True:
             try:
                 while True:
+                    print_err("Running command")
                     line_bytes = await asyncio.wait_for(proc.stdout.readline(), timeout=0.1)
                     if not line_bytes:
                         break
@@ -52,6 +75,7 @@ async def nethogs_tracker(update_interval=1):
                         continue
                     try:
                         cmd, sent, recv = line.rsplit("\t", 2)
+                        print_err("split message")
                         sent = float(sent)
                         recv = float(recv)
                         name, _ = normalize_name(cmd)
@@ -59,10 +83,13 @@ async def nethogs_tracker(update_interval=1):
                         program_totals[name]["recv_kbps"] += recv
                         program_totals[name]["total_bytes"] += (sent + recv) * 1024 / 8
                         add_process_data(name, recv, sent)
-                    except ValueError:
+                    except ValueError as ve:
+                        print_err(f"split error {ve}")
                         continue
-            except asyncio.TimeoutError:
-                pass
+            except asyncio.TimeoutError as ase:
+                print_err(f"aes error {ase}")
+
+                
 
             yield program_totals
             await asyncio.sleep(update_interval)

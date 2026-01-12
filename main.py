@@ -16,6 +16,34 @@ import socket
 from pathlib import Path
 import json
 SOCKET_PATH = "/tmp/nethogs_service.sock"
+#sorting
+
+def quick_sort_simple(arr: list[float], arr_display: list[ft.Control]):
+    if len(arr) <= 1:
+        return arr, arr_display
+
+    pivot_val = arr[0]
+    pivot_ctrl = arr_display[0]
+
+    left_vals, left_ctrls = [], []
+    right_vals, right_ctrls = [], []
+
+    for val, ctrl in zip(arr[1:], arr_display[1:]):
+        if val < pivot_val:
+            left_vals.append(val)
+            left_ctrls.append(ctrl)
+        else:
+            right_vals.append(val)
+            right_ctrls.append(ctrl)
+
+    sorted_left_vals, sorted_left_ctrls = quick_sort_simple(left_vals, left_ctrls)
+    sorted_right_vals, sorted_right_ctrls = quick_sort_simple(right_vals, right_ctrls)
+
+    return (
+        sorted_left_vals + [pivot_val] + sorted_right_vals,
+        sorted_left_ctrls + [pivot_ctrl] + sorted_right_ctrls
+    )
+# Example Usage:
 #----------- Network Helpers---------------
 async def fetch_nethogs_data():
     """
@@ -53,9 +81,9 @@ def create_program_row(name, sent, recv, total_bytes, index=0):
         content=ft.Row(
             [
                 ft.Text(name, expand=True),
-                ft.Text(f"{sent:.2f} KBps", width=80, text_align=ft.TextAlign.RIGHT),
-                ft.Text(f"{recv:.2f} KBps", width=80, text_align=ft.TextAlign.RIGHT),
-                ft.Text(f"{total_bytes / 1024:.2f} KB", width=100, text_align=ft.TextAlign.RIGHT),
+                ft.Text(f"{sent:.2f} KB", width=80, text_align=ft.TextAlign.RIGHT),
+                ft.Text(f"{recv:.2f} KB", width=80, text_align=ft.TextAlign.RIGHT),
+                ft.Text(f"{total_bytes / 1024:.2f} MB", width=100, text_align=ft.TextAlign.RIGHT),
             ],
             alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
             spacing=10
@@ -182,7 +210,7 @@ def main(page: ft.Page):
         page.update()
         return
     dropdown = ft.Dropdown(
-        value=vni_interface_options[0] if vni_interface_options else None,
+        value=vni.get_interface(),
         options=[
             ft.dropdown.Option(i) for i in vni_interface_options
         ],
@@ -307,24 +335,39 @@ def main(page: ft.Page):
     
 
     async def update_nethog_ui_task():
-        while True:
-            totals = await fetch_nethogs_data()
+        try:
+            while True:
+                totals = await fetch_nethogs_data()
+                total_vals = []
 
-            # Clear previous rows
-            program_container.controls.clear()
+                # Clear previous rows
+                program_container.controls.clear()
 
-            # Add rows with alternating colors
-            for i, (name, data) in enumerate(totals.items()):
-                program_container.controls.append(
-                    create_program_row(name, data['kbps_up'], data['kbps_down'], data['kbps_total'], index=i)
-                )
-                print(name, data['kbps_up'], data['kbps_down'], data['kbps_total'])
+                # Add rows with alternating colors
+                for i, (name, data) in enumerate(totals.items()):
+                    if(name == "Nethog"):
+                        continue
+                    program_container.controls.append(
+                        create_program_row(name, data['kbps_up'], data['kbps_down'], data['kbps_total'], index=i)
+                    )
+                    total_vals.append(data['kbps_total'])
+                    
+                    print(name, data['kbps_up'], data['kbps_down'], data['kbps_total'])
 
-            # Refresh the UI
-            page.update()
+                # Refresh the UI
+                total_vals, sorted_controls = quick_sort_simple(total_vals, program_container.controls)
+                program_container.controls.clear()
+                for sc in reversed(sorted_controls):
+                     program_container.controls.append(sc)
+                    
+                #  = sorted_controls
+                page.update()
 
-            # Wait before the next update
-            await asyncio.sleep(1)
+                # Wait before the next update
+                await asyncio.sleep(1)
+        except asyncio.CancelledError:
+            print("SS")
+            pass
     # ---------- Async Periodic Update ----------
     async def update_all_stats_periodically():
         
