@@ -16,15 +16,18 @@ def debug_print(message,er=None):
     print(f"DEBUG {filename} line {line_number}: {message}",file=sys.stderr)
     if(er != None):
         print(f"\tError: {er}")
+    return f"DEBUG {filename} line {line_number}: {message}"
 
 def set_interface(interface_name:str):
     global chosen_interface
-    valid_options = get_vnstat_interfaces()
+    valid_options,err = get_vnstat_interfaces()
+    if(err != None):
+        return -2,err
     if(interface_name not in valid_options):
-        return -1
+        return -1,interface_name
     else:
         chosen_interface = interface_name
-        return 0
+        return 0,None
 def get_interface():
     global chosen_interface
     return chosen_interface
@@ -40,14 +43,16 @@ def get_vnstat_interfaces():
         for name in interfaces:
             if(name == None):
                 interfaces.remove(None)
-        return interfaces
+        return interfaces,None
     except subprocess.CalledProcessError as e:
-        debug_print("Error running command")
-        return None
+        te = debug_print("Error running command",er=e)
+        return None,[te,e]
+    except FileNotFoundError as fe:
+        te = debug_print("Error running command",er=fe)
+        return None,[te,fe]
     except json.JSONDecodeError as je:
-        debug_print("Error decoding json")
-
-        return None
+        te = debug_print("Error decoding json",er=je)
+        return None,[te,je]
 
 def bytes_to_mb(bytes_value: int) -> float:
     """

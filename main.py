@@ -10,8 +10,88 @@ from datetime import datetime
 import random
 import asyncio
 import vnstat_interface as vni
+from typing import Union, List
 
 # ---------- Helper UI Components ----------
+def error_screen(
+    short_error: str,
+    detailed_error: Union[str, List[str]]
+) -> ft.Control:
+    
+    # Normalize detailed error to text
+    if isinstance(detailed_error, list):
+        detailed_text = "\n".join(str(line) for line in detailed_error)
+    else:
+        detailed_text = str(detailed_error)
+
+    details_visible = False
+
+    details_text = ft.Text(
+        detailed_text,
+        selectable=True,
+        size=13,
+        font_family="monospace",
+        visible=False,
+    )
+
+    details_container = ft.Container(
+        content=details_text,
+        padding=12,
+        border_radius=8,
+        bgcolor=ft.Colors.with_opacity(0.05, ft.Colors.WHITE),
+        visible=False,
+    )
+
+    def toggle_details(e):
+        nonlocal details_visible
+        details_visible = not details_visible
+        details_text.visible = details_visible
+        details_container.visible = details_visible
+        e.control.text = "Hide full error" if details_visible else "See full error"
+        e.control.update()
+        # copy_row.visible = details_visible
+        # copy_row.update()
+        details_text.update()
+        details_container.update()
+
+    async def copy_error(e:ft.Event):
+        # print()
+        await e.page.clipboard.set(detailed_text)
+
+    return ft.Container(
+        alignment=ft.alignment.Alignment.CENTER,
+        expand=True,
+        content=ft.Column(
+            [
+                ft.Icon(ft.Icons.ERROR_OUTLINE, size=48, color=ft.Colors.RED),
+                ft.Text(
+                    short_error,
+                    size=16,
+                    text_align=ft.TextAlign.CENTER,
+                ),
+                ft.TextButton(
+                    "See full error",
+                    on_click=toggle_details,
+                ),
+                details_container,
+                ft.Row(
+                    [
+                        ft.Button(
+                            "Copy error",
+                            icon=ft.Icons.COPY,
+                            on_click=copy_error,
+                        )
+                    ],
+                    alignment=ft.MainAxisAlignment.CENTER,
+                    visible=True,
+                ),
+            ],
+            alignment=ft.MainAxisAlignment.CENTER,
+            horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+            spacing=12,
+        ),
+    )
+
 def stat_box(title: str, value_ref: ft.Text, bgcolor=None):
     return ft.Container(
         content=ft.Column(
@@ -43,8 +123,12 @@ def main(page: ft.Page):
     day_up_text = ft.Text("0 MB", size=20, weight=ft.FontWeight.BOLD)
     day_down_text = ft.Text("0 MB", size=20, weight=ft.FontWeight.BOLD)
     day_total_text = ft.Text("0 MB", size=20, weight=ft.FontWeight.BOLD)
-    vni_interface_options = vni.get_vnstat_interfaces()
-
+    vni_interface_options,err = vni.get_vnstat_interfaces()
+    if(vni_interface_options == None):
+        page.controls.clear()
+        page.controls.append(error_screen("Failed to get Interface list",detailed_error=err))
+        page.update()
+        return
     dropdown = ft.Dropdown(
         value=vni_interface_options[0] if vni_interface_options else None,
         options=[
@@ -139,9 +223,15 @@ def main(page: ft.Page):
         year_total_text.value = f"{total:.2f} GB"
     def update_vni_interface():
         new_interface = dropdown.value
-        ret  = vni.set_interface(new_interface)
+        ret,err  = vni.set_interface(new_interface)
+        if(ret == -2):
+            page.controls.clear()
+            page.controls.append(error_screen("Failed to set interface",detailed_error=err))
+            page.update()
+            return
         if(ret != 0):
-            dropdown.error_text = "Error"
+            
+            dropdown.error_text = f"{err} is no longer a valid option"
 
     def add_graph_point(timestamp: int, up_mb: float, down_mb: float):
         x = len(bar_groups)
@@ -227,4 +317,4 @@ def main(page: ft.Page):
     asyncio.create_task(update_all_stats_periodically())
 
 # ---------- Run ----------
-ft.app(target=main)
+ft.run(main=main)
