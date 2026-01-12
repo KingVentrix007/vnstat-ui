@@ -11,8 +11,28 @@ import random
 import asyncio
 import vnstat_interface as vni
 from typing import Union, List
-
+import nethog_iner as neti
 # ---------- Helper UI Components ----------
+
+def create_program_row(name, sent, recv, total_bytes, index=0):
+    """Creates a single row for a program in the stats table with alternating row colors."""
+    bg_color = ft.Colors.with_opacity(0.05, ft.Colors.WHITE) if index % 2 == 0 else None
+    return ft.Container(
+        content=ft.Row(
+            [
+                ft.Text(name, expand=True),
+                ft.Text(f"{sent:.2f} KBps", width=80, text_align=ft.TextAlign.RIGHT),
+                ft.Text(f"{recv:.2f} KBps", width=80, text_align=ft.TextAlign.RIGHT),
+                ft.Text(f"{total_bytes / 1024:.2f} KB", width=100, text_align=ft.TextAlign.RIGHT),
+            ],
+            alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+            spacing=10
+        ),
+        padding=8,
+        bgcolor=bg_color,
+        border_radius=6,
+    )
+
 def error_screen(
     short_error: str,
     detailed_error: Union[str, List[str]]
@@ -183,25 +203,45 @@ def main(page: ft.Page):
         spacing=16,
     )
 
+    header = ft.Row(
+    [
+        ft.Text("Program", weight="bold", expand=True),
+        ft.Text("Sent KBps", weight="bold", width=80, text_align=ft.TextAlign.RIGHT),
+        ft.Text("Recv KBps", weight="bold", width=80, text_align=ft.TextAlign.RIGHT),
+        ft.Text("Total KB", weight="bold", width=100, text_align=ft.TextAlign.RIGHT),
+    ],
+    spacing=10,
+    alignment=ft.MainAxisAlignment.SPACE_BETWEEN
+    )
+
+    program_container = ft.Column(
+        scroll=ft.ScrollMode.ALWAYS,
+        spacing=5,
+        expand=True,
+    )
+
+
     # ---------- Chart Data ----------
-    bar_groups: list[BarChartGroup] = []
-    bar_graph_timestamps = []
+    # bar_groups: list[BarChartGroup] = []
+    # bar_graph_timestamps = []
 
-    chart = BarChart(
-        groups=bar_groups,
-        max_y=1,
-        expand=True,
+    # chart = BarChart(
+    #     groups=bar_groups,
+    #     max_y=1,
+    #     expand=True,
         
-    )
+    # )
+    # nethhog_output_data = ft.List
+    # nethhog_output_data_container = ft.Container
 
 
-    chart_container = ft.Container(
-        content=chart,
-        padding=20,
-        border_radius=12,
-        bgcolor=ft.Colors.with_opacity(0.08, ft.Colors.BLACK),
-        expand=True,
-    )
+    # chart_container = ft.Container(
+    #     content=chart,
+    #     padding=20,
+    #     border_radius=12,
+    #     bgcolor=ft.Colors.with_opacity(0.08, ft.Colors.BLACK),
+    #     expand=True,
+    # )
 
     # ---------- Update Functions ----------
     def update_month_stats(up_mb: float, down_mb: float):
@@ -232,54 +272,21 @@ def main(page: ft.Page):
         if(ret != 0):
             
             dropdown.error_text = f"{err} is no longer a valid option"
+    
 
-    def add_graph_point(timestamp: int, up_mb: float, down_mb: float):
-        x = len(bar_groups)
-        if(timestamp in bar_graph_timestamps):
-            return
-        bar_graph_timestamps.append(timestamp)
-            
-        group = BarChartGroup(
-            x=x,
-            rods=[
-                BarChartRod(
-                    
-                    from_y=0,
-                    to_y=up_mb,
-                    width=10,
-                    color=ft.Colors.BLUE_400,
-                    tooltip=BarChartRodTooltip(text=f"Upload {up_mb}"),
-                    
-                ),
-                BarChartRod(
-                    from_y=0,
-                    to_y=down_mb,
-                    width=10,
-                    color=ft.Colors.RED_400,
-                    tooltip=BarChartRodTooltip(text=f"Download {down_mb}"),
-                    
-                ),
-            ],
-        
-            
-        )
+    async def update_nethog_ui_task():
+        async for totals in neti.nethogs_tracker():
+            # Clear previous rows
+            program_container.controls.clear()
 
-        bar_groups.append(group)
+            # Add rows with alternating colors
+            for i, (name, data) in enumerate(totals.items()):
+                program_container.controls.append(
+                    create_program_row(name, data['sent_kbps'], data['recv_kbps'], data['total_bytes'], index=i)
+                )
 
-        # Limit to last N bars
-        N = 20
-        if len(bar_groups) > N:
-            bar_groups[:] = bar_groups[-N:]
-
-        # Auto-scale Y axis
-        chart.max_y = max(
-            max(up_mb, down_mb),
-            chart.max_y+30 or 0,
-        )
-
-        chart.update()
-
-
+            # Refresh the UI
+            page.update()
     # ---------- Async Periodic Update ----------
     async def update_all_stats_periodically():
         
@@ -293,7 +300,9 @@ def main(page: ft.Page):
             update_month_stats(month_up, month_down)
             update_day_stats(day_up, day_down)
             update_year_stats(year_up, year_down)
-            add_graph_point(month_timestamp,month_up, month_down)
+            # await update_nethog_ui()
+            # await update_nethog_ui(page,container=program_container)
+            # add_graph_point(month_timestamp,month_up, month_down)
 
             page.update()
             await asyncio.sleep(1)
@@ -306,8 +315,10 @@ def main(page: ft.Page):
                 controls,
                 day_stats,
                 month_stats,
-                chart_container,
+                # chart_container,
                 year_stats,
+                header,
+                program_container
             ],
             spacing=24,
             expand=True,
@@ -315,6 +326,7 @@ def main(page: ft.Page):
     )
 
     asyncio.create_task(update_all_stats_periodically())
+    asyncio.create_task(update_nethog_ui_task())
 
 # ---------- Run ----------
 ft.run(main=main)
