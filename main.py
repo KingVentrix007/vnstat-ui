@@ -275,6 +275,7 @@ def main(page: ft.Page):
     
 
     async def update_nethog_ui_task():
+        print("UPDATING")
         async for totals in neti.nethogs_tracker():
             # Clear previous rows
             program_container.controls.clear()
@@ -284,6 +285,7 @@ def main(page: ft.Page):
                 program_container.controls.append(
                     create_program_row(name, data['sent_kbps'], data['recv_kbps'], data['total_bytes'], index=i)
                 )
+                print(name, data['sent_kbps'], data['recv_kbps'], data['total_bytes'])
 
             # Refresh the UI
             page.update()
