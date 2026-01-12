@@ -45,7 +45,25 @@ def get_today_data():
 def get_process_history(name: str):
     cursor.execute("SELECT day, kbps_down, kbps_up, kbps_total FROM days WHERE name = ? ORDER BY day", (name,))
     return cursor.fetchall()
+def get_process_history_json(name: str):
+    cursor.execute(
+        "SELECT day, kbps_down, kbps_up, kbps_total FROM days WHERE name = ? ORDER BY day",
+        (name,)
+    )
+    
+    rows = cursor.fetchall()
 
+    data = [
+        {
+            "day": day,
+            "kbps_down": kbps_down,
+            "kbps_up": kbps_up,
+            "kbps_total": kbps_total
+        }
+        for day, kbps_down, kbps_up, kbps_total in rows
+    ]
+
+    return data  # already JSON-serializable
 def get_total_usage(name: str):
     cursor.execute("SELECT SUM(kbps_down), SUM(kbps_up), SUM(kbps_total) FROM days WHERE name = ?", (name,))
     return cursor.fetchone()

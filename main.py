@@ -18,6 +18,53 @@ import json
 import math
 SOCKET_PATH = "/tmp/nethogs_service.sock"
 CONFIG_PATH = "vnstat_ui_config.json"
+
+previous_page_controls = []
+def show_program_data(page: ft.Page, program_name: str, data: list[dict]):
+    # Save current page state
+    global previous_page_controls
+    previous_page_controls = page.controls.copy()
+
+    # Clear the page
+    page.controls.clear()
+
+    # Title
+    page.add(ft.Text(f"Usage history for {program_name}", size=24, weight=ft.FontWeight.BOLD))
+
+    # Table header
+    table = ft.DataTable(columns=[
+        ft.DataColumn(ft.Text("Day")),
+        ft.DataColumn(ft.Text("Down (KBps)")),
+        ft.DataColumn(ft.Text("Up (KBps)")),
+        ft.DataColumn(ft.Text("Total (KBps)")),
+    ])
+
+    # Fill table with data
+    for entry in data:
+        table.rows.append(
+            ft.DataRow(cells=[
+                ft.DataCell(ft.Text(str(entry['day']))),
+                ft.DataCell(ft.Text(f"{entry['kbps_down']:.2f}")),
+                ft.DataCell(ft.Text(f"{entry['kbps_up']:.2f}")),
+                ft.DataCell(ft.Text(f"{entry['kbps_total']:.2f}")),
+            ])
+        )
+
+    # Back button
+    back_button = ft.ElevatedButton(
+        "Back",
+        on_click=lambda e: restore_previous_page(page)
+    )
+
+    # Add to page
+    page.add(table, back_button)
+    page.update()
+
+def restore_previous_page(page: ft.Page):
+    # Clear page and restore previous controls
+    page.controls.clear()
+    page.controls.extend(previous_page_controls)
+    page.update()
 #sorting
 
 def quick_sort_simple(arr: list[float], arr_display: list[ft.Control]):
@@ -62,6 +109,35 @@ async def fetch_nethogs_data():
             with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as s:
                 s.connect(SOCKET_PATH)
                 s.sendall(b"get")
+                data = b""
+                while True:
+                    chunk = s.recv(65536)
+                    if not chunk:
+                        break
+                    data += chunk
+                return json.loads(data.decode())
+        except Exception as e:
+            print("Error fetching nethogs data:", e)
+            return {}
+
+    return await loop.run_in_executor(None, socket_query)
+
+async def fetch_nethogs_data_per_task(tast_name):
+    """
+    Connect to the nethogs service via UNIX socket and return the latest totals.
+    """
+    if not Path(SOCKET_PATH).exists():
+        return {}
+
+    loop = asyncio.get_running_loop()
+
+    # Run the blocking socket code in a thread to avoid blocking the event loop
+    def socket_query():
+        try:
+            with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as s:
+                s.connect(SOCKET_PATH)
+                cmd = f"all {tast_name}"
+                s.sendall(cmd.encode())
                 data = b""
                 while True:
                     chunk = s.recv(65536)
@@ -187,6 +263,7 @@ def stat_box(title: str, value_ref: ft.Text, bgcolor=None):
         border_radius=12,
         bgcolor=bgcolor or ft.Colors.with_opacity(0.08, ft.Colors.WHITE),
         expand=True,
+        
     )
 
 # ---------- Main App ----------
@@ -197,6 +274,7 @@ def main(page: ft.Page):
     page.theme_mode = ft.ThemeMode.DARK
     gauge_value = 0.0
     max_data_usage_year = 50
+    values_button = []
     # ---------- Top Stats ----------
     up_text = ft.Text("0 MB", size=24, weight=ft.FontWeight.BOLD)
     down_text = ft.Text("0 MB", size=24, weight=ft.FontWeight.BOLD)
@@ -399,7 +477,7 @@ def main(page: ft.Page):
             )
         )
 
-        value_text.value = str(int(value))+" GB"
+        value_text.value = str(int(value))+f" GB / {max_data_usage_year} GB"
         page.update()
 
     def animate_to(target):
@@ -429,6 +507,10 @@ def main(page: ft.Page):
             
             dropdown.error_text = f"{err} is no longer a valid option"
     
+    async def show_all_proc_use(taskname):
+        all_val = await fetch_nethogs_data_per_task(taskname)
+        show_program_data(page,taskname,all_val)
+        print(all_val)
 
     async def update_nethog_ui_task():
         try:
@@ -443,8 +525,10 @@ def main(page: ft.Page):
                 for i, (name, data) in enumerate(totals.items()):
                     if(name == "Nethog"):
                         continue
+                    part = create_program_row(name, data['kbps_up'], data['kbps_down'], data['kbps_total'], index=i)
+                    part.on_click = lambda e, n=name: asyncio.create_task(show_all_proc_use(n))
                     program_container.controls.append(
-                        create_program_row(name, data['kbps_up'], data['kbps_down'], data['kbps_total'], index=i)
+                        part
                     )
                     total_vals.append(data['kbps_total'])
                     
@@ -462,7 +546,6 @@ def main(page: ft.Page):
                 # Wait before the next update
                 await asyncio.sleep(1)
         except asyncio.CancelledError:
-            print("SS")
             pass
     # ---------- Async Periodic Update ----------
     async def update_all_stats_periodically():

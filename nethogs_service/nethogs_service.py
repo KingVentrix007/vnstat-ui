@@ -1,7 +1,7 @@
 import asyncio
 import json
 from collections import defaultdict
-from db_helper import add_process_data, get_today_data, get_process_history, get_total_usage
+from db_helper import add_process_data, get_today_data, get_process_history_json, get_total_usage
 import inspect
 import os
 from datetime import datetime
@@ -16,8 +16,8 @@ def print_err(message):
     now = datetime.now()
     datetime_str = now.strftime("%Y-%m-%d %H:%M:%S")
     err_msg = f"DEBUG({datetime_str}) {filename} line {line_number}: {message}"
-    with open(ERR_PATH,"a") as f:
-        f.write(err_msg+"\n")
+    # with open(ERR_PATH,"a") as f:
+    #     f.write(err_msg+"\n")
     # print(file=sys.stderr)
 
 def normalize_name(proc_str: str):
@@ -102,20 +102,29 @@ async def nethogs_tracker(update_interval=1):
 
 async def handle_client(reader, writer):
     try:
-        _ = await reader.read(100)  # you could also ignore input entirely
+        cmd = await reader.read(100)  # you could also ignore input entirely
+        if(cmd == b"get"):
+            # Pull today's stats directly from the database
+            today_stats = get_today_data()  # returns list of tuples
 
-        # Pull today's stats directly from the database
-        today_stats = get_today_data()  # returns list of tuples
+            # Convert to a dict for JSON
+            data_dict = {
+                name: {"kbps_down": down, "kbps_up": up, "kbps_total": total, "last_update": last_update}
+                for name, down, up, total, last_update in today_stats
+            }
 
-        # Convert to a dict for JSON
-        data_dict = {
-            name: {"kbps_down": down, "kbps_up": up, "kbps_total": total, "last_update": last_update}
-            for name, down, up, total, last_update in today_stats
-        }
-
-        data_bytes = json.dumps(data_dict).encode()
-        writer.write(data_bytes)
-        await writer.drain()
+            data_bytes = json.dumps(data_dict).encode()
+            writer.write(data_bytes)
+            await writer.drain()
+        else:
+            str_cmd = cmd.decode()
+            command_parts = str_cmd.split(" ")
+            if(command_parts[0] == "all"):
+                proc_stats = get_process_history_json(command_parts[1])
+                data_bytes = json.dumps(proc_stats).encode()
+                writer.write(data_bytes)
+                await writer.drain()
+                
     except Exception as e:
         print("Error handling client:", e)
     finally:
