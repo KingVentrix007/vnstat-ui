@@ -43,7 +43,30 @@ def main(page: ft.Page):
     day_up_text = ft.Text("0 MB", size=20, weight=ft.FontWeight.BOLD)
     day_down_text = ft.Text("0 MB", size=20, weight=ft.FontWeight.BOLD)
     day_total_text = ft.Text("0 MB", size=20, weight=ft.FontWeight.BOLD)
+    vni_interface_options = vni.get_vnstat_interfaces()
 
+    dropdown = ft.Dropdown(
+        value=vni_interface_options[0] if vni_interface_options else None,
+        options=[
+            ft.dropdown.Option(i) for i in vni_interface_options
+        ],
+        expand=True,
+        
+    )
+
+    controls = ft.Row(
+        [
+            ft.Container(
+                content=ft.Column(
+                    [dropdown],
+                    spacing=4,
+                ),
+                padding=16,
+                border_radius=12,
+                expand=True,
+            ),
+        ]
+    )
     day_stats = ft.Row(
         [
             stat_box("DAY UP", day_up_text, bgcolor=ft.Colors.with_opacity(0.12, ft.Colors.CYAN)),
@@ -114,6 +137,11 @@ def main(page: ft.Page):
         year_up_text.value = f"{up_gb:.2f} GB"
         year_down_text.value = f"{down_gb:.2f} GB"
         year_total_text.value = f"{total:.2f} GB"
+    def update_vni_interface():
+        new_interface = dropdown.value
+        ret  = vni.set_interface(new_interface)
+        if(ret != 0):
+            dropdown.error_text = "Error"
 
     def add_graph_point(timestamp: int, up_mb: float, down_mb: float):
         x = len(bar_groups)
@@ -130,7 +158,7 @@ def main(page: ft.Page):
                     to_y=up_mb,
                     width=10,
                     color=ft.Colors.BLUE_400,
-                    tooltip=BarChartRodTooltip(text="Hello"),
+                    tooltip=BarChartRodTooltip(text=f"Upload {up_mb}"),
                     
                 ),
                 BarChartRod(
@@ -138,7 +166,7 @@ def main(page: ft.Page):
                     to_y=down_mb,
                     width=10,
                     color=ft.Colors.RED_400,
-                    tooltip=BarChartRodTooltip(text="Hello2"),
+                    tooltip=BarChartRodTooltip(text=f"Download {down_mb}"),
                     
                 ),
             ],
@@ -156,7 +184,7 @@ def main(page: ft.Page):
         # Auto-scale Y axis
         chart.max_y = max(
             max(up_mb, down_mb),
-            chart.max_y+10 or 0,
+            chart.max_y+30 or 0,
         )
 
         chart.update()
@@ -164,6 +192,7 @@ def main(page: ft.Page):
 
     # ---------- Async Periodic Update ----------
     async def update_all_stats_periodically():
+        
         while True:
             # Replace these with your actual data fetching
             month_timestamp, month_up, month_down = vni.get_month_output()
@@ -180,9 +209,11 @@ def main(page: ft.Page):
             await asyncio.sleep(1)
 
     # ---------- Layout ----------
+    dropdown.on_select=update_vni_interface
     page.add(
         ft.Column(
             [
+                controls,
                 day_stats,
                 month_stats,
                 chart_container,

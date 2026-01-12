@@ -1,7 +1,54 @@
 import subprocess
 import json
+import inspect
+import os
+import sys
 # RX = Download
 #TX = Upload
+
+chosen_interface = "wlan0"
+def debug_print(message,er=None):
+    """Prints a message along with the file name and line number of the caller."""
+    # Get frame info of the caller's stack
+    frame_info = inspect.getframeinfo(inspect.currentframe().f_back)
+    filename = os.path.basename(frame_info.filename)
+    line_number = frame_info.lineno
+    print(f"DEBUG {filename} line {line_number}: {message}",file=sys.stderr)
+    if(er != None):
+        print(f"\tError: {er}")
+
+def set_interface(interface_name:str):
+    global chosen_interface
+    valid_options = get_vnstat_interfaces()
+    if(interface_name not in valid_options):
+        return -1
+    else:
+        chosen_interface = interface_name
+        return 0
+def get_interface():
+    global chosen_interface
+    return chosen_interface
+def get_vnstat_interfaces():
+    cmd = ["vnstat", "--json", "m"]  # monthly JSON output
+    interfaces = []
+    try:
+        # Run the command and capture output
+        result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+        data = json.loads(result.stdout)
+        for inter in data['interfaces']:
+            interfaces.append(inter.get("name",None))
+        for name in interfaces:
+            if(name == None):
+                interfaces.remove(None)
+        return interfaces
+    except subprocess.CalledProcessError as e:
+        debug_print("Error running command")
+        return None
+    except json.JSONDecodeError as je:
+        debug_print("Error decoding json")
+
+        return None
+
 def bytes_to_mb(bytes_value: int) -> float:
     """
     Convert bytes to megabytes (MB), rounded to 2 decimal places.
@@ -20,6 +67,7 @@ def bytes_to_gb(bytes_value: int) -> float:
 
 
 def get_month_output():
+    global chosen_interface
     cmd = ["vnstat", "--json", "m"]  # monthly JSON output
 
     try:
@@ -30,7 +78,7 @@ def get_month_output():
         data = json.loads(result.stdout)
         section_to_use = None
         for inter in data['interfaces']:
-            if(inter["name"] == "wlan0"):
+            if(inter["name"] == chosen_interface):
                 section_to_use = inter
                 break
         # Pretty-print JSON
@@ -48,6 +96,8 @@ def get_month_output():
         print(f"Failed to parse JSON: {e}")
 
 def get_day_output():
+    global chosen_interface
+
     cmd = ["vnstat", "--json", "d"]  # monthly JSON output
 
     try:
@@ -58,7 +108,7 @@ def get_day_output():
         data = json.loads(result.stdout)
         section_to_use = None
         for inter in data['interfaces']:
-            if(inter["name"] == "wlan0"):
+            if(inter["name"] == chosen_interface):
                 section_to_use = inter
                 break
         # Pretty-print JSON
@@ -76,6 +126,8 @@ def get_day_output():
         print(f"Failed to parse JSON: {e}")
 
 def get_year_output():
+    global chosen_interface
+
     cmd = ["vnstat", "--json", "y"]  # monthly JSON output
 
     try:
@@ -86,7 +138,7 @@ def get_year_output():
         data = json.loads(result.stdout)
         section_to_use = None
         for inter in data['interfaces']:
-            if(inter["name"] == "wlan0"):
+            if(inter["name"] == chosen_interface):
                 section_to_use = inter
                 break
         # Pretty-print JSON
