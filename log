@@ -1,0 +1,14 @@
+× nethogs.service - Nethogs Tracker Service
+     Loaded: loaded (/etc/systemd/system/nethogs.service; enabled; preset: disabled)
+     Active: failed (Result: exit-code) since Mon 2026-01-12 11:02:33 SAST; 21s ago
+   Duration: 76ms
+ Invocation: 28f380c180494ae3a3a2d54a327f7178
+    Process: 82488 ExecStart=/usr/bin/python3 /mnt/MyCodeProjects/vnstat-ui/nethogs_service/nethogs_service.py (code=exited, status=1/FAILURE)
+   Main PID: 82488 (code=exited, status=1/FAILURE)
+   Mem peak: 11.1M
+        CPU: 63ms
+
+Jan 12 11:02:33 tristan-uses-arch systemd[1]: nethogs.service: Scheduled restart job, restart counter is at 5.
+Jan 12 11:02:33 tristan-uses-arch systemd[1]: nethogs.service: Start request repeated too quickly.
+Jan 12 11:02:33 tristan-uses-arch systemd[1]: nethogs.service: Failed with result 'exit-code'.
+Jan 12 11:02:33 tristan-uses-arch systemd[1]: Failed to start Nethogs Tracker Service.

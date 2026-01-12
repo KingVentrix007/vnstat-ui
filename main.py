@@ -12,6 +12,38 @@ import asyncio
 import vnstat_interface as vni
 from typing import Union, List
 import nethog_iner as neti
+import socket
+from pathlib import Path
+import json
+SOCKET_PATH = "/tmp/nethogs_service.sock"
+#----------- Network Helpers---------------
+async def fetch_nethogs_data():
+    """
+    Connect to the nethogs service via UNIX socket and return the latest totals.
+    """
+    if not Path(SOCKET_PATH).exists():
+        return {}
+
+    loop = asyncio.get_running_loop()
+
+    # Run the blocking socket code in a thread to avoid blocking the event loop
+    def socket_query():
+        try:
+            with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as s:
+                s.connect(SOCKET_PATH)
+                s.sendall(b"get")
+                data = b""
+                while True:
+                    chunk = s.recv(65536)
+                    if not chunk:
+                        break
+                    data += chunk
+                return json.loads(data.decode())
+        except Exception as e:
+            print("Error fetching nethogs data:", e)
+            return {}
+
+    return await loop.run_in_executor(None, socket_query)
 # ---------- Helper UI Components ----------
 
 def create_program_row(name, sent, recv, total_bytes, index=0):
@@ -275,20 +307,24 @@ def main(page: ft.Page):
     
 
     async def update_nethog_ui_task():
-        print("UPDATING")
-        async for totals in neti.nethogs_tracker():
+        while True:
+            totals = await fetch_nethogs_data()
+
             # Clear previous rows
             program_container.controls.clear()
 
             # Add rows with alternating colors
             for i, (name, data) in enumerate(totals.items()):
                 program_container.controls.append(
-                    create_program_row(name, data['sent_kbps'], data['recv_kbps'], data['total_bytes'], index=i)
+                    create_program_row(name, data['kbps_up'], data['kbps_down'], data['kbps_total'], index=i)
                 )
-                print(name, data['sent_kbps'], data['recv_kbps'], data['total_bytes'])
+                print(name, data['kbps_up'], data['kbps_down'], data['kbps_total'])
 
             # Refresh the UI
             page.update()
+
+            # Wait before the next update
+            await asyncio.sleep(1)
     # ---------- Async Periodic Update ----------
     async def update_all_stats_periodically():
         
