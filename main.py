@@ -5,7 +5,7 @@ from flet_charts import (
     BarChartRod,
     BarChartTooltip,BarChartRodTooltip
 )
-
+import flet.canvas as cv
 from datetime import datetime
 import random
 import asyncio
@@ -15,7 +15,9 @@ import nethog_iner as neti
 import socket
 from pathlib import Path
 import json
+import math
 SOCKET_PATH = "/tmp/nethogs_service.sock"
+CONFIG_PATH = "vnstat_ui_config.json"
 #sorting
 
 def quick_sort_simple(arr: list[float], arr_display: list[ft.Control]):
@@ -193,7 +195,8 @@ def main(page: ft.Page):
     page.bgcolor = ft.Colors.BLACK
     page.padding = 20
     page.theme_mode = ft.ThemeMode.DARK
-
+    gauge_value = 0.0
+    max_data_usage_year = 50
     # ---------- Top Stats ----------
     up_text = ft.Text("0 MB", size=24, weight=ft.FontWeight.BOLD)
     down_text = ft.Text("0 MB", size=24, weight=ft.FontWeight.BOLD)
@@ -217,13 +220,52 @@ def main(page: ft.Page):
         expand=True,
         
     )
+    set_year_max_button = ft.Button(
+         content= "Set Max Data Usage",
+         
+    )
 
+    text_input_for_max_value = ft.TextField(
+        label="Enter Max Data Usage",
+        input_filter=ft.InputFilter(allow=True, regex_string=r"^[0-9]*$", replacement_string=""),
+        keyboard_type=ft.KeyboardType.NUMBER, # Prompts the numeric keyboard on mobile devices
+        hint_text="Only digits allowed"
+    )
+
+    value_text = ft.Text(
+        "0",
+        size=32,
+        weight=ft.FontWeight.BOLD,
+        color=ft.Colors.WHITE
+    )
+
+    canvas = cv.Canvas(
+        width=300,
+        height=160,
+        shapes=[]
+    )
     controls = ft.Row(
         [
             ft.Container(
+                content=ft.Row(
+                    [dropdown,set_year_max_button,text_input_for_max_value],
+                    # horizontal_alignment="center",
+                    # spacing=4,
+                    
+                ),
+                # padding=16,
+                # border_radius=12,
+                # expand=True,
+            ),
+        ]
+    )
+    usage_counters = ft.Row(
+        [
+            ft.Container(
                 content=ft.Column(
-                    [dropdown],
-                    spacing=4,
+                    [canvas,value_text],
+                    spacing=10,
+                    horizontal_alignment="center",
                 ),
                 padding=16,
                 border_radius=12,
@@ -281,28 +323,6 @@ def main(page: ft.Page):
     )
 
 
-    # ---------- Chart Data ----------
-    # bar_groups: list[BarChartGroup] = []
-    # bar_graph_timestamps = []
-
-    # chart = BarChart(
-    #     groups=bar_groups,
-    #     max_y=1,
-    #     expand=True,
-        
-    # )
-    # nethhog_output_data = ft.List
-    # nethhog_output_data_container = ft.Container
-
-
-    # chart_container = ft.Container(
-    #     content=chart,
-    #     padding=20,
-    #     border_radius=12,
-    #     bgcolor=ft.Colors.with_opacity(0.08, ft.Colors.BLACK),
-    #     expand=True,
-    # )
-
     # ---------- Update Functions ----------
     def update_month_stats(up_mb: float, down_mb: float):
         total = up_mb + down_mb
@@ -321,6 +341,78 @@ def main(page: ft.Page):
         year_up_text.value = f"{up_gb:.2f} GB"
         year_down_text.value = f"{down_gb:.2f} GB"
         year_total_text.value = f"{total:.2f} GB"
+    def draw_gauge(value):
+        nonlocal gauge_value,max_data_usage_year
+        canvas.shapes.clear()
+
+        center_x = 150
+        center_y = 150
+        radius = 120
+
+        start_angle = math.pi      # 180°
+        sweep_bg = math.pi         # 180°
+        sweep_fg = math.pi * (value / max_data_usage_year)
+
+        # Background arc
+        canvas.shapes.append(
+            cv.Arc(
+                x=center_x - radius,
+                y=center_y - radius,
+                width=radius * 2,
+                height=radius * 2,
+                start_angle=start_angle,
+                sweep_angle=sweep_bg,
+                paint=ft.Paint(
+                    color=ft.Colors.GREY_800,
+                    stroke_width=18,
+                    style=ft.PaintingStyle.STROKE,
+                    stroke_cap=ft.StrokeCap.ROUND,
+                ),
+            )
+        )
+        # bar_color = ft.Colors.CYAN
+        percent = value / max_data_usage_year
+        if percent >= 0.85:
+            bar_color = ft.Colors.RED
+        elif percent >= 0.6:
+            bar_color = ft.Colors.ORANGE
+        else:
+            bar_color = ft.Colors.GREEN
+
+        # Foreground arc (filled)
+        canvas.shapes.append(
+            cv.Arc(
+                x=center_x - radius,
+                y=center_y - radius,
+                width=radius * 2,
+                height=radius * 2,
+                start_angle=start_angle,
+                sweep_angle=sweep_fg,
+                paint=ft.Paint(
+                    color=bar_color,
+                    stroke_width=18,
+                    style=ft.PaintingStyle.STROKE,
+                    stroke_cap=ft.StrokeCap.ROUND,
+                ),
+            )
+        )
+
+        value_text.value = str(int(value))+" GB"
+        page.update()
+
+    def animate_to(target):
+        nonlocal gauge_value
+        current = gauge_value
+        steps = 4
+        step = (target - current) / steps
+
+        for _ in range(steps):
+            current += step
+            gauge_value = current
+            draw_gauge(current)
+    def update_max_data_year():
+        nonlocal max_data_usage_year
+        max_data_usage_year = int(text_input_for_max_value.value)
     def update_vni_interface():
         new_interface = dropdown.value
         ret,err  = vni.set_interface(new_interface)
@@ -381,6 +473,7 @@ def main(page: ft.Page):
             update_month_stats(month_up, month_down)
             update_day_stats(day_up, day_down)
             update_year_stats(year_up, year_down)
+            animate_to(year_up+year_down)
             # await update_nethog_ui()
             # await update_nethog_ui(page,container=program_container)
             # add_graph_point(month_timestamp,month_up, month_down)
@@ -390,10 +483,12 @@ def main(page: ft.Page):
 
     # ---------- Layout ----------
     dropdown.on_select=update_vni_interface
+    set_year_max_button.on_click=update_max_data_year
     page.add(
         ft.Column(
             [
                 controls,
+                usage_counters,
                 day_stats,
                 month_stats,
                 # chart_container,
