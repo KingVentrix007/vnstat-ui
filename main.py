@@ -212,6 +212,7 @@ def main(page: ft.Page):
         page.controls.append(error_screen("Failed to get Interface list",detailed_error=err))
         page.update()
         return
+    
     dropdown = ft.Dropdown(
         value=vni.get_interface(),
         options=[
@@ -317,9 +318,10 @@ def main(page: ft.Page):
     )
 
     program_container = ft.Column(
-        scroll=ft.ScrollMode.ALWAYS,
+        scroll=ft.ScrollMode.ADAPTIVE,
         spacing=5,
-        expand=True,
+        height=300, 
+        # expand=True,
     )
 
 
@@ -412,7 +414,9 @@ def main(page: ft.Page):
             draw_gauge(current)
     def update_max_data_year():
         nonlocal max_data_usage_year
-        max_data_usage_year = int(text_input_for_max_value.value)
+        if(text_input_for_max_value.value.isdigit()):
+            max_data_usage_year = int(text_input_for_max_value.value)
+        
     def update_vni_interface():
         new_interface = dropdown.value
         ret,err  = vni.set_interface(new_interface)
@@ -451,7 +455,7 @@ def main(page: ft.Page):
                 program_container.controls.clear()
                 for sc in reversed(sorted_controls):
                      program_container.controls.append(sc)
-                    
+                program_container.height = (50*(0.80*len(total_vals)))
                 #  = sorted_controls
                 page.update()
 
@@ -496,6 +500,7 @@ def main(page: ft.Page):
                 header,
                 program_container
             ],
+            scroll=ft.ScrollMode.ALWAYS,
             spacing=24,
             expand=True,
         )
