@@ -268,11 +268,12 @@ def stat_box(title: str, value_ref: ft.Text, bgcolor=None):
     )
 
 # ---------- Main App ----------
-def network_gui_main(page: ft.Page):
-    page.title = "Data Monitor"
-    page.bgcolor = ft.Colors.BLACK
-    page.padding = 20
-    page.theme_mode = ft.ThemeMode.DARK
+def network_gui_main(page: ft.Page, host: ft.Column):
+    # control_bar_save = page.controls.copy()
+    # page.title = "Data Monitor"
+    # page.bgcolor = ft.Colors.BLACK
+    # page.padding = 20
+    # page.theme_mode = ft.ThemeMode.DARK
     gauge_value = 0.0
     max_data_usage_year = 50
     programs_sent_note = []
@@ -287,8 +288,8 @@ def network_gui_main(page: ft.Page):
     day_total_text = ft.Text("0 MB", size=20, weight=ft.FontWeight.BOLD)
     vni_interface_options,err = vni.get_vnstat_interfaces()
     if(vni_interface_options == None):
-        page.controls.clear()
-        page.controls.append(error_screen("Failed to get Interface list",detailed_error=err))
+        host.controls.clear()
+        host.controls.append(error_screen("Failed to get Interface list",detailed_error=err))
         page.update()
         return
     
@@ -578,24 +579,25 @@ def network_gui_main(page: ft.Page):
     # ---------- Layout ----------
     dropdown.on_select=update_vni_interface
     set_year_max_button.on_click=update_max_data_year
-    page.add(
-        ft.Column(
-            [
-                controls,
-                usage_counters,
-                day_stats,
-                month_stats,
-                # chart_container,
-                year_stats,
-                header,
-                program_container
-            ],
-            scroll=ft.ScrollMode.ALWAYS,
-            spacing=24,
-            expand=True,
-        )
-    )
+    root = ft.Column(
+    [
+        controls,
+        usage_counters,
+        day_stats,
+        month_stats,
+        year_stats,
+        header,
+        program_container,
+    ],
+    scroll=ft.ScrollMode.ALWAYS,
+    spacing=24,
+    expand=True,
+)
 
+    host.controls.clear()
+    host.controls.append(root)
+    host.update()
+    # page.controls.extend(control_bar_save)
     asyncio.create_task(update_all_stats_periodically())
     asyncio.create_task(update_nethog_ui_task())
 

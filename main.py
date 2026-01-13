@@ -1,80 +1,148 @@
 import flet as ft
 from network_gui import network_gui_main
-# Example callback functions
-# def network_gui_main(page: ft.Page):
-#     page.controls.clear()
-#     page.add(ft.Text("Network Monitor GUI", size=30))
-#     page.update()
 
-def system_gui_main(page: ft.Page):
-    page.controls.clear()
-    page.add(ft.Text("System Monitor GUI", size=30))
-    page.update()
 
-def cpu_gui_main(page: ft.Page):
-    page.controls.clear()
-    page.add(ft.Text("CPU Monitor GUI", size=30))
-    page.update()
+# ---------------- GUI PAGES ---------------- #
 
-def ram_gui_main(page: ft.Page):
-    page.controls.clear()
-    page.add(ft.Text("RAM Monitor GUI", size=30))
-    page.update()
+def system_gui_main(content: ft.Column,host):
+    host.controls.clear()
+    host.controls.append(ft.Text("System Monitor GUI", size=30))
+    content.update()
 
-def disk_gui_main(page: ft.Page):
-    page.controls.clear()
-    page.add(ft.Text("Disk Monitor GUI", size=30))
-    page.update()
 
-# Main Flet app
+def cpu_gui_main(content: ft.Column,host):
+    host.controls.clear()
+    host.controls.append(ft.Text("CPU Monitor GUI", size=30))
+    content.update()
+
+
+def ram_gui_main(content: ft.Column,host):
+    host.controls.clear()
+    host.controls.append(ft.Text("RAM Monitor GUI", size=30))
+    content.update()
+
+
+def disk_gui_main(content: ft.Column,host):
+    host.controls.clear()
+    host.controls.append(ft.Text("Disk Monitor GUI", size=30))
+    content.update()
+
+
+def network_gui_wrapper(content: ft.Column,host):
+    host.controls.clear()
+    network_gui_main(content,host)
+    content.update()
+
+
+# ---------------- MAIN APP ---------------- #
+
 def main(page: ft.Page):
     page.title = "System Monitor"
-    page.window_width = 800
+    page.window_width = 900
     page.window_height = 500
+    page.padding = 0
 
-    # Sidebar menu buttons
-    menu_buttons = [
-        ("Network", network_gui_main),
-        ("System", system_gui_main),
-        ("CPU", cpu_gui_main),
-        ("RAM", ram_gui_main),
-        ("Disk", disk_gui_main),
-    ]
+    sidebar_expanded = True
 
-    # Container for main content
-    content_container = ft.Column()
-
-    # Function to handle sidebar button clicks
-    def on_menu_click(callback):
-        def wrapper(e):
-            callback(page)
-        return wrapper
-
-    # Create sidebar
-    sidebar = ft.Column(
-        controls=[
-            ft.ElevatedButton(
-                name,
-                on_click=on_menu_click(cb),
-                width=150
-            )
-            for name, cb in menu_buttons
-        ],
-        spacing=10
+    # Right-side content
+    content = ft.Column(
+        expand=True,
+        alignment=ft.MainAxisAlignment.START,
+        horizontal_alignment=ft.CrossAxisAlignment.START,
+        controls=[]
     )
 
-    # Layout: sidebar on left, content on right
+    # Sidebar width refs
+    sidebar = ft.Container()
+    sidebar.width = 200
+
+    def load_view(cb):
+        cb(page,content)
+
+    def toggle_sidebar(e):
+        nonlocal sidebar_expanded
+        sidebar_expanded = not sidebar_expanded
+
+        sidebar.width = 200 if sidebar_expanded else 60
+
+        for btn in menu_buttons:
+            btn.text = btn.data if sidebar_expanded else ""
+            btn.icon = btn.icon
+            btn.update()
+
+        sidebar.update()
+
+    # Menu buttons
+    menu_buttons = [
+        ft.IconButton(
+            icon=ft.Icons.NETWORK_CHECK,
+
+            data="Network",
+            on_click=lambda e: load_view(network_gui_wrapper),
+            style=ft.ButtonStyle(alignment=ft.alignment.Alignment.CENTER_LEFT)
+        ),
+        ft.IconButton(
+            icon=ft.Icons.DESKTOP_WINDOWS,
+
+            data="System",
+            on_click=lambda e: load_view(system_gui_main),
+            style=ft.ButtonStyle(alignment=ft.alignment.Alignment.CENTER_LEFT)
+        ),
+        ft.IconButton(
+            icon=ft.Icons.MEMORY,
+            
+
+            on_click=lambda e: load_view(cpu_gui_main),
+            style=ft.ButtonStyle(alignment=ft.alignment.Alignment.CENTER_LEFT)
+        ),
+        ft.IconButton(
+
+            icon=ft.Icons.STORAGE,
+            
+            data="RAM",
+            on_click=lambda e: load_view(ram_gui_main),
+            style=ft.ButtonStyle(alignment=ft.alignment.Alignment.CENTER_LEFT)
+        ),
+        ft.IconButton(
+
+            icon=ft.Icons.SAVE,
+            
+            data="Disk",
+            on_click=lambda e: load_view(disk_gui_main),
+            style=ft.ButtonStyle(alignment=ft.alignment.Alignment.CENTER_LEFT)
+        ),
+    ]
+
+    sidebar.content = ft.Column(
+        controls=[
+            ft.IconButton(
+                icon=ft.Icons.MENU,
+                on_click=toggle_sidebar
+            ),
+            ft.Divider(),
+            *menu_buttons
+        ],
+        spacing=5
+    )
+
+    # Layout
     page.add(
         ft.Row(
+            expand=True,
             controls=[
                 sidebar,
-                ft.Container(width=20),  # small spacer
-                content_container,
-            ],
+                ft.VerticalDivider(width=1),
+                ft.Container(
+                    expand=True,
+                    padding=20,
+                    content=content
+                )
+            ]
         )
     )
 
-    # Initially show system GUI
-    # system_gui_main(page)
+    # Default view
+    # system_gui_main(page,content)
+
 
 ft.app(target=main)
